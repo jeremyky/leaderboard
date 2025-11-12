@@ -457,14 +457,91 @@ def get_metric_info(metric_name: str) -> dict:
     })
 
 
+    # Multilingual Metrics
+    "per_language_accuracy": {
+        "name": "Per-Language Accuracy",
+        "formula": "Accuracy computed separately for each language",
+        "range": "0.0 - 1.0 per language (higher is better)",
+        "description": "Accuracy breakdown by language. Shows which languages the model handles well vs poorly.",
+        "example": "English: 0.95, Spanish: 0.92, Chinese: 0.78 → Model struggles with Chinese",
+        "when_to_use": "Use to identify languages needing improvement in multilingual models",
+        "limitations": "Doesn't show cross-lingual transfer patterns",
+        "interpretation": {
+            "0.85-1.0": "Excellent - Strong performance in this language",
+            "0.70-0.85": "Good - Decent performance",
+            "0.55-0.70": "Fair - Moderate performance",
+            "0.0-0.55": "Poor - Weak performance in this language"
+        }
+    },
+    
+    "per_language_f1": {
+        "name": "Per-Language F1",
+        "formula": "F1 score computed separately for each language",
+        "range": "0.0 - 1.0 per language (higher is better)",
+        "description": "F1 breakdown by language. Reveals language-specific strengths and weaknesses.",
+        "example": "French: 0.88, Arabic: 0.65 → Model needs Arabic improvement",
+        "when_to_use": "Use for detailed multilingual evaluation",
+        "limitations": "Requires sufficient examples per language for reliable estimates",
+        "interpretation": {
+            "0.85-1.0": "Excellent - Strong language support",
+            "0.70-0.85": "Good - Adequate language support",
+            "0.55-0.70": "Fair - Weak language support",
+            "0.0-0.55": "Poor - Very weak in this language"
+        }
+    },
+    
+    "cross_lingual_transfer": {
+        "name": "Cross-Lingual Transfer Score",
+        "formula": "Average performance on non-English languages / English performance",
+        "range": "0.0 - 1.0+ (1.0 = perfect transfer, higher is better)",
+        "description": "Measures how well performance transfers from English to other languages. 1.0 means equal performance across languages.",
+        "example": "English: 0.90, Avg others: 0.72 → Transfer = 0.80 (20% performance drop)",
+        "when_to_use": "Use to evaluate multilingual model quality and training effectiveness",
+        "limitations": "Assumes English as source language; may not apply to all training scenarios",
+        "interpretation": {
+            "0.9-1.0": "Excellent - Minimal performance drop across languages",
+            "0.7-0.9": "Good - Reasonable transfer",
+            "0.5-0.7": "Fair - Significant transfer loss",
+            "0.0-0.5": "Poor - Model fails to transfer to other languages"
+        }
+    },
+    
+    "language_variance": {
+        "name": "Language Performance Variance",
+        "formula": "Standard deviation of scores across languages",
+        "range": "0.0+ (lower is better)",
+        "description": "Measures consistency across languages. Low variance means model performs similarly across all languages.",
+        "example": "Variance 0.05 (very consistent) vs 0.25 (highly inconsistent)",
+        "when_to_use": "Use to assess multilingual model robustness",
+        "limitations": "Doesn't indicate which languages are problematic",
+        "interpretation": {
+            "0.0-0.05": "Excellent - Very consistent across languages",
+            "0.05-0.10": "Good - Reasonably consistent",
+            "0.10-0.20": "Fair - Some languages significantly worse",
+            "0.20+": "Poor - Highly inconsistent performance"
+        }
+    }
+}
+
+
+def get_metric_info(metric_name: str) -> dict:
+    """Get information about a specific metric"""
+    return METRICS_CATALOG.get(metric_name, {
+        "name": metric_name.replace("_", " ").title(),
+        "description": "Metric information not available",
+        "range": "Unknown",
+        "formula": "Unknown"
+    })
+
+
 def get_metrics_for_task(task_type: str) -> list:
     """Get all relevant metrics for a task type"""
     task_metrics = {
-        "text_classification": ["accuracy", "precision", "recall", "f1"],
-        "named_entity_recognition": ["ner_f1", "ner_precision", "ner_recall"],
-        "document_qa": ["exact_match", "token_f1"],
+        "text_classification": ["accuracy", "precision", "recall", "f1", "balanced_accuracy", "cohens_kappa"],
+        "named_entity_recognition": ["f1", "precision", "recall", "partial_f1"],
+        "document_qa": ["exact_match", "token_f1", "bleu"],
         "line_qa": ["exact_match", "token_f1"],
-        "retrieval": ["retrieval_accuracy", "mrr", "ndcg"]
+        "retrieval": ["retrieval_accuracy", "mrr", "precision_at_3", "recall_at_3"]
     }
     return task_metrics.get(task_type, ["accuracy"])
 

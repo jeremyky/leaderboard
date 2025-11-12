@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import MetricInfoModal from './MetricInfoModal';
 import MultiMetricLeaderboard from './MultiMetricLeaderboard';
 import ModelInsights from './ModelInsights';
+import LanguageBreakdown from './LanguageBreakdown';
 
 const LeaderboardCard = ({ leaderboard }) => {
   const [showMetricInfo, setShowMetricInfo] = useState(false);
@@ -114,6 +115,11 @@ const LeaderboardCard = ({ leaderboard }) => {
           >
             ✕
           </button>
+          
+          {/* Language Breakdown (for multilingual datasets) */}
+          <LanguageBreakdown scores={selectedModel.detailed_scores} />
+          
+          {/* Model Insights */}
           <ModelInsights
             scores={selectedModel.detailed_scores}
             primaryMetric={leaderboard.primary_metric}

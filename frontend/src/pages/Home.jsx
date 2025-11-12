@@ -37,9 +37,31 @@ const Home = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 pb-20 px-3">
       <h1 className="text-4xl font-bold text-white mb-4 mt-8">LLM Leaderboards</h1>
-      <p className="text-gray-400 mb-8 text-center max-w-2xl">
+      <p className="text-gray-400 mb-4 text-center max-w-2xl">
         Transparent benchmarking platform for AI models across multiple task types
       </p>
+      
+      {/* Quick Links to Domains */}
+      <div className="mb-8 flex flex-wrap gap-3 justify-center">
+        <button
+          onClick={() => window.location.href = '/domains?domain=multilingual'}
+          className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg text-sm font-medium transition-all"
+        >
+          🌍 Multilingual Benchmarks
+        </button>
+        <button
+          onClick={() => window.location.href = '/domains?domain=finance'}
+          className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg text-sm font-medium transition-all"
+        >
+          💼 Finance Benchmarks
+        </button>
+        <button
+          onClick={() => window.location.href = '/domains'}
+          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-all"
+        >
+          View All Domains →
+        </button>
+      </div>
 
       {/* Filter */}
       <div className="mb-8 w-full max-w-md">

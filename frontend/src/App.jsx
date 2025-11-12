@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Home from './pages/Home';
 import CreateDataset from './pages/CreateDataset';
 import Submit from './pages/Submit';
+import DomainBenchmarks from './pages/DomainBenchmarks';
 
 function App() {
   return (
@@ -23,7 +24,14 @@ function App() {
                   to="/"
                   className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
                 >
-                  Leaderboards
+                  All Benchmarks
+                </Link>
+                <Link
+                  to="/domains"
+                  className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center"
+                >
+                  <span className="mr-1">🌍</span>
+                  Domain-Specific
                 </Link>
                 <Link
                   to="/create-dataset"
@@ -45,6 +53,7 @@ function App() {
         {/* Main Content */}
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/domains" element={<DomainBenchmarks />} />
           <Route path="/create-dataset" element={<CreateDataset />} />
           <Route path="/submit" element={<Submit />} />
         </Routes>

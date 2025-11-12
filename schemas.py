@@ -116,7 +116,7 @@ class LeaderboardEntryResponse(BaseModel):
     updated_at: str
     is_internal: bool
     submission_id: str
-    detailed_scores: Optional[Dict[str, float]] = None
+    detailed_scores: Optional[Dict[str, Any]] = None  # Changed to Any to support nested dicts for per-language scores
     
     class Config:
         from_attributes = True
