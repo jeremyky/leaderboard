@@ -7,6 +7,7 @@ Designed to prevent metric gaming by supporting diverse evaluation strategies.
 from typing import List, Dict, Any
 from collections import Counter
 import re
+import numpy as np
 
 
 class BaseEvaluator:
@@ -94,7 +95,37 @@ class TextClassificationEvaluator(BaseEvaluator):
         micro_f1 = (2 * micro_precision * micro_recall / (micro_precision + micro_recall)
                    if (micro_precision + micro_recall) > 0 else 0)
         
-        return {
+        # Balanced Accuracy - accounts for class imbalance
+        recalls_per_class = []
+        for cls in all_classes:
+            tp = class_correct.get(cls, 0)
+            fn = class_total.get(cls, 0) - tp
+            cls_recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            recalls_per_class.append(cls_recall)
+        balanced_accuracy = sum(recalls_per_class) / len(recalls_per_class) if recalls_per_class else 0
+        
+        # Matthews Correlation Coefficient (MCC)
+        # For binary classification, this is more informative than accuracy
+        if len(all_classes) == 2:
+            tp = total_tp
+            tn = total - total_tp - total_fp - total_fn  # True negatives
+            fp = total_fp
+            fn = total_fn
+            
+            mcc_numerator = (tp * tn) - (fp * fn)
+            mcc_denominator = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+            mcc = mcc_numerator / mcc_denominator if mcc_denominator > 0 else 0
+        else:
+            mcc = None
+        
+        # Cohen's Kappa - agreement beyond chance
+        p_observed = accuracy
+        # Expected accuracy if predictions were random but matched class distribution
+        p_expected = sum((class_total[cls] / total) * (class_pred_total.get(cls, 0) / total) 
+                        for cls in all_classes if total > 0) if total > 0 else 0
+        kappa = (p_observed - p_expected) / (1 - p_expected) if (1 - p_expected) > 0 else 0
+        
+        result = {
             "accuracy": round(accuracy, 4),
             "precision": round(macro_precision, 4),
             "recall": round(macro_recall, 4),
@@ -102,9 +133,16 @@ class TextClassificationEvaluator(BaseEvaluator):
             "micro_precision": round(micro_precision, 4),
             "micro_recall": round(micro_recall, 4),
             "micro_f1": round(micro_f1, 4),
+            "balanced_accuracy": round(balanced_accuracy, 4),
+            "cohens_kappa": round(kappa, 4),
             "num_classes": len(all_classes),
             "total_predictions": total
         }
+        
+        if mcc is not None:
+            result["matthews_corr"] = round(mcc, 4)
+        
+        return result
 
 
 class NEREvaluator(BaseEvaluator):
@@ -141,10 +179,45 @@ class NEREvaluator(BaseEvaluator):
         recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0
         f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0
         
+        # Compute partial match scores (relaxed boundaries)
+        # Consider an entity correct if it overlaps with ground truth, even if boundaries don't match exactly
+        partial_tp = 0
+        for gt in ground_truth:
+            gt_id = gt["id"]
+            true_entities = gt.get("answer", [])
+            
+            if gt_id not in pred_map:
+                continue
+            
+            pred_entities = pred_map[gt_id]
+            if not isinstance(pred_entities, list):
+                pred_entities = [pred_entities]
+            if not isinstance(true_entities, list):
+                true_entities = [true_entities]
+            
+            # For simplicity, count overlapping entities
+            for pred_ent in pred_entities:
+                for true_ent in true_entities:
+                    # Simple overlap check
+                    if isinstance(pred_ent, tuple) and isinstance(true_ent, tuple):
+                        # Check if entity texts overlap
+                        if len(pred_ent) >= 1 and len(true_ent) >= 1:
+                            if str(pred_ent[0]).lower() in str(true_ent[0]).lower() or \
+                               str(true_ent[0]).lower() in str(pred_ent[0]).lower():
+                                partial_tp += 1
+                                break
+        
+        partial_precision = partial_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0
+        partial_recall = partial_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0
+        partial_f1 = (2 * partial_precision * partial_recall / (partial_precision + partial_recall)) if (partial_precision + partial_recall) > 0 else 0
+        
         return {
+            "f1": round(f1, 4),
             "precision": round(precision, 4),
             "recall": round(recall, 4),
-            "f1": round(f1, 4),
+            "partial_f1": round(partial_f1, 4),
+            "partial_precision": round(partial_precision, 4),
+            "partial_recall": round(partial_recall, 4),
             "true_positives": total_tp,
             "false_positives": total_fp,
             "false_negatives": total_fn
@@ -218,10 +291,60 @@ class QAEvaluator(BaseEvaluator):
         avg_em = sum(exact_matches) / len(exact_matches) if exact_matches else 0.0
         avg_f1 = sum(f1_scores) / len(f1_scores) if f1_scores else 0.0
         
+        # Compute BLEU-style score (n-gram overlap)
+        bleu_scores = []
+        for gt in ground_truth:
+            gt_id = gt["id"]
+            true_answer = gt["answer"]
+            
+            if gt_id not in pred_map:
+                bleu_scores.append(0.0)
+                continue
+            
+            pred_answer = pred_map[gt_id]
+            
+            # Simple unigram BLEU
+            pred_tokens = self.normalize_answer(pred_answer).split()
+            gt_tokens = self.normalize_answer(true_answer if not isinstance(true_answer, list) else true_answer[0]).split()
+            
+            if not pred_tokens or not gt_tokens:
+                bleu_scores.append(0.0)
+                continue
+            
+            # Count matching unigrams
+            matches = len(set(pred_tokens) & set(gt_tokens))
+            bleu = matches / len(pred_tokens) if pred_tokens else 0
+            bleu_scores.append(bleu)
+        
+        avg_bleu = sum(bleu_scores) / len(bleu_scores) if bleu_scores else 0.0
+        
+        # Answer length ratio (checks if answers are too long/short)
+        length_ratios = []
+        for gt in ground_truth:
+            gt_id = gt["id"]
+            true_answer = gt["answer"]
+            if isinstance(true_answer, list):
+                true_answer = true_answer[0]
+            
+            if gt_id not in pred_map:
+                continue
+            
+            pred_answer = pred_map[gt_id]
+            pred_len = len(pred_answer.split())
+            true_len = len(str(true_answer).split())
+            
+            if true_len > 0:
+                ratio = pred_len / true_len
+                length_ratios.append(ratio)
+        
+        avg_length_ratio = sum(length_ratios) / len(length_ratios) if length_ratios else 1.0
+        
         return {
             "exact_match": round(avg_em, 4),
             "f1": round(avg_f1, 4),
             "token_f1": round(avg_f1, 4),  # Alias for clarity
+            "bleu": round(avg_bleu, 4),
+            "answer_length_ratio": round(avg_length_ratio, 4),
             "total_questions": len(exact_matches),
             "exact_matches_count": sum(exact_matches)
         }
@@ -259,8 +382,83 @@ class RetrievalEvaluator(BaseEvaluator):
         
         accuracy = correct / total if total > 0 else 0.0
         
+        # Mean Reciprocal Rank (MRR) - measures rank of first correct result
+        reciprocal_ranks = []
+        for gt in ground_truth:
+            gt_id = gt["id"]
+            true_doc_ids = gt.get("answer", [])
+            
+            if not isinstance(true_doc_ids, list):
+                true_doc_ids = [true_doc_ids]
+            
+            if gt_id not in pred_map:
+                reciprocal_ranks.append(0.0)
+                continue
+            
+            pred_doc_ids = pred_map[gt_id]
+            if not isinstance(pred_doc_ids, list):
+                pred_doc_ids = [pred_doc_ids]
+            
+            # Find rank of first correct document
+            for rank, pred_id in enumerate(pred_doc_ids, start=1):
+                if pred_id in true_doc_ids:
+                    reciprocal_ranks.append(1.0 / rank)
+                    break
+            else:
+                reciprocal_ranks.append(0.0)
+        
+        mrr = sum(reciprocal_ranks) / len(reciprocal_ranks) if reciprocal_ranks else 0.0
+        
+        # Precision@K and Recall@K (K=1, 3, 5)
+        def precision_at_k(k):
+            prec_scores = []
+            for gt in ground_truth:
+                gt_id = gt["id"]
+                true_doc_ids = set(gt.get("answer", []) if isinstance(gt.get("answer", []), list) else [gt.get("answer")])
+                
+                if gt_id not in pred_map:
+                    prec_scores.append(0.0)
+                    continue
+                
+                pred_doc_ids = pred_map[gt_id]
+                if not isinstance(pred_doc_ids, list):
+                    pred_doc_ids = [pred_doc_ids]
+                
+                top_k = pred_doc_ids[:k]
+                relevant_in_k = sum(1 for doc in top_k if doc in true_doc_ids)
+                prec_scores.append(relevant_in_k / k if k > 0 else 0)
+            
+            return sum(prec_scores) / len(prec_scores) if prec_scores else 0.0
+        
+        def recall_at_k(k):
+            rec_scores = []
+            for gt in ground_truth:
+                gt_id = gt["id"]
+                true_doc_ids = set(gt.get("answer", []) if isinstance(gt.get("answer", []), list) else [gt.get("answer")])
+                
+                if gt_id not in pred_map:
+                    rec_scores.append(0.0)
+                    continue
+                
+                pred_doc_ids = pred_map[gt_id]
+                if not isinstance(pred_doc_ids, list):
+                    pred_doc_ids = [pred_doc_ids]
+                
+                top_k = pred_doc_ids[:k]
+                relevant_in_k = sum(1 for doc in top_k if doc in true_doc_ids)
+                rec_scores.append(relevant_in_k / len(true_doc_ids) if len(true_doc_ids) > 0 else 0)
+            
+            return sum(rec_scores) / len(rec_scores) if rec_scores else 0.0
+        
         return {
             "retrieval_accuracy": round(accuracy, 4),
+            "mrr": round(mrr, 4),
+            "precision_at_1": round(precision_at_k(1), 4),
+            "precision_at_3": round(precision_at_k(3), 4),
+            "precision_at_5": round(precision_at_k(5), 4),
+            "recall_at_1": round(recall_at_k(1), 4),
+            "recall_at_3": round(recall_at_k(3), 4),
+            "recall_at_5": round(recall_at_k(5), 4),
             "correct_retrievals": correct,
             "total_queries": total,
             "failed_retrievals": total - correct

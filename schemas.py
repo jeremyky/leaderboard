@@ -116,6 +116,7 @@ class LeaderboardEntryResponse(BaseModel):
     updated_at: str
     is_internal: bool
     submission_id: str
+    detailed_scores: Optional[Dict[str, float]] = None
     
     class Config:
         from_attributes = True

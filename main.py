@@ -330,15 +330,18 @@ async def get_all_leaderboards(
             # Format date
             updated_month = sub.evaluated_at.strftime("%b %Y") if sub.evaluated_at else "N/A"
             
-            entries.append(LeaderboardEntryResponse(
-                rank=rank,
-                model_name=sub.model_name,
-                score=sub.primary_score,
-                confidence_interval=sub.confidence_interval,
-                updated_at=updated_month,
-                is_internal=sub.is_internal,
-                submission_id=sub.id
-            ))
+            # Create entry dict with detailed scores
+            entry_data = {
+                "rank": rank,
+                "model_name": sub.model_name,
+                "score": sub.primary_score,
+                "confidence_interval": sub.confidence_interval,
+                "updated_at": updated_month,
+                "is_internal": sub.is_internal,
+                "submission_id": sub.id,
+                "detailed_scores": sub.detailed_scores  # Add detailed scores
+            }
+            entries.append(entry_data)
         
         if entries:  # Only include datasets with submissions
             leaderboards.append(LeaderboardResponse(
@@ -383,15 +386,16 @@ async def get_dataset_leaderboard(
     for rank, sub in enumerate(submissions, start=1):
         updated_month = sub.evaluated_at.strftime("%b %Y") if sub.evaluated_at else "N/A"
         
-        entries.append(LeaderboardEntryResponse(
-            rank=rank,
-            model_name=sub.model_name,
-            score=sub.primary_score,
-            confidence_interval=sub.confidence_interval,
-            updated_at=updated_month,
-            is_internal=sub.is_internal,
-            submission_id=sub.id
-        ))
+        entries.append({
+            "rank": rank,
+            "model_name": sub.model_name,
+            "score": sub.primary_score,
+            "confidence_interval": sub.confidence_interval,
+            "updated_at": updated_month,
+            "is_internal": sub.is_internal,
+            "submission_id": sub.id,
+            "detailed_scores": sub.detailed_scores
+        })
     
     return LeaderboardResponse(
         dataset_id=dataset.id,

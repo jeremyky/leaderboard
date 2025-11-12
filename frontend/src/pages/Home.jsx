@@ -87,7 +87,7 @@ const Home = () => {
               <p className="text-sm">Create a dataset to get started!</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-7xl">
+            <div className="flex flex-col space-y-8 w-full max-w-[95%]">
               {leaderboards.map((leaderboard) => (
                 <LeaderboardCard key={leaderboard.dataset_id} leaderboard={leaderboard} />
               ))}
